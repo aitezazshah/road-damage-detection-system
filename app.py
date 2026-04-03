@@ -16,6 +16,38 @@ def _is_streamlit_cloud() -> bool:
         return False
 
 
+def _pip_uninstall_gui_cv2() -> None:
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "uninstall",
+            "-y",
+            "opencv-python",
+            "opencv-contrib-python",
+        ],
+        capture_output=True,
+    )
+    sys.modules.pop("cv2", None)
+
+
+def _pip_install_headless_nodeps() -> None:
+    """Do not use --force-reinstall: it reinstalls numpy and can hit Errno 13 on Streamlit Cloud."""
+    subprocess.check_call(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--no-cache-dir",
+            "--no-deps",
+            "opencv-python-headless==4.10.0.84",
+        ]
+    )
+    sys.modules.pop("cv2", None)
+
+
 def _load_cv2():
     """Ultralytics pulls opencv-python (GUI); it needs libGL. Cloud must use headless only."""
     if os.environ.get("INSPECTRAIL_CV2_OK") == "1":
@@ -23,32 +55,9 @@ def _load_cv2():
 
         return _cv2
 
-    # Both opencv-python and opencv-python-headless can be installed; import may load GUI cv2 first.
+    # GUI + headless can both be installed; import may bind to GUI cv2. Uninstall GUI only (build already has headless).
     if _is_streamlit_cloud() and os.environ.get("INSPECTRAIL_CV2_BOOT") != "1":
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "uninstall",
-                "-y",
-                "opencv-python",
-                "opencv-contrib-python",
-            ],
-            capture_output=True,
-        )
-        subprocess.check_call(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "--no-cache-dir",
-                "--force-reinstall",
-                "opencv-python-headless==4.10.0.84",
-            ]
-        )
-        sys.modules.pop("cv2", None)
+        _pip_uninstall_gui_cv2()
         os.environ["INSPECTRAIL_CV2_BOOT"] = "1"
 
     try:
@@ -57,30 +66,8 @@ def _load_cv2():
         msg = str(e).lower()
         if "libgl" not in msg and "cannot open shared object" not in msg:
             raise
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "uninstall",
-                "-y",
-                "opencv-python",
-                "opencv-contrib-python",
-            ],
-            capture_output=True,
-        )
-        subprocess.check_call(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "--no-cache-dir",
-                "--force-reinstall",
-                "opencv-python-headless==4.10.0.84",
-            ]
-        )
-        sys.modules.pop("cv2", None)
+        _pip_uninstall_gui_cv2()
+        _pip_install_headless_nodeps()
         import cv2 as _cv2
 
     os.environ["INSPECTRAIL_CV2_OK"] = "1"
