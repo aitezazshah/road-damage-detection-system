@@ -8,23 +8,33 @@ import subprocess
 import sys
 
 
+def _is_streamlit_cloud() -> bool:
+    """Repo is mounted under /mount/src on Streamlit Community Cloud."""
+    try:
+        return "/mount/src" in os.path.abspath(__file__)
+    except Exception:
+        return False
+
+
 def _load_cv2():
-    """Ultralytics often pulls opencv-python (needs libGL). Streamlit Cloud is headless."""
+    """Ultralytics pulls opencv-python (GUI); it needs libGL. Cloud must use headless only."""
     if os.environ.get("INSPECTRAIL_CV2_OK") == "1":
         import cv2 as _cv2
 
         return _cv2
-    try:
-        import cv2 as _cv2
 
-        os.environ["INSPECTRAIL_CV2_OK"] = "1"
-        return _cv2
-    except Exception as e:
-        msg = str(e).lower()
-        if "libgl" not in msg and "cannot open shared object" not in msg:
-            raise
+    # Both opencv-python and opencv-python-headless can be installed; import may load GUI cv2 first.
+    if _is_streamlit_cloud() and os.environ.get("INSPECTRAIL_CV2_BOOT") != "1":
         subprocess.run(
-            [sys.executable, "-m", "pip", "uninstall", "-y", "opencv-python", "opencv-contrib-python"],
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "uninstall",
+                "-y",
+                "opencv-python",
+                "opencv-contrib-python",
+            ],
             capture_output=True,
         )
         subprocess.check_call(
@@ -34,14 +44,47 @@ def _load_cv2():
                 "pip",
                 "install",
                 "--no-cache-dir",
+                "--force-reinstall",
+                "opencv-python-headless==4.10.0.84",
+            ]
+        )
+        sys.modules.pop("cv2", None)
+        os.environ["INSPECTRAIL_CV2_BOOT"] = "1"
+
+    try:
+        import cv2 as _cv2
+    except Exception as e:
+        msg = str(e).lower()
+        if "libgl" not in msg and "cannot open shared object" not in msg:
+            raise
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "uninstall",
+                "-y",
+                "opencv-python",
+                "opencv-contrib-python",
+            ],
+            capture_output=True,
+        )
+        subprocess.check_call(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--no-cache-dir",
+                "--force-reinstall",
                 "opencv-python-headless==4.10.0.84",
             ]
         )
         sys.modules.pop("cv2", None)
         import cv2 as _cv2
 
-        os.environ["INSPECTRAIL_CV2_OK"] = "1"
-        return _cv2
+    os.environ["INSPECTRAIL_CV2_OK"] = "1"
+    return _cv2
 
 
 cv2 = _load_cv2()
