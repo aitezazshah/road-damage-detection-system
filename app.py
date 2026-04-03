@@ -48,35 +48,10 @@ def _pip_install_headless_nodeps() -> None:
     sys.modules.pop("cv2", None)
 
 
-def _load_cv2():
-    """Ultralytics pulls opencv-python (GUI); it needs libGL. Cloud must use headless only."""
-    if os.environ.get("INSPECTRAIL_CV2_OK") == "1":
-        import cv2 as _cv2
 
-        return _cv2
-
-    # GUI + headless can both be installed; import may bind to GUI cv2. Uninstall GUI only (build already has headless).
-    if _is_streamlit_cloud() and os.environ.get("INSPECTRAIL_CV2_BOOT") != "1":
-        _pip_uninstall_gui_cv2()
-        os.environ["INSPECTRAIL_CV2_BOOT"] = "1"
-
-    try:
-        import cv2 as _cv2
-    except Exception as e:
-        msg = str(e).lower()
-        if "libgl" not in msg and "cannot open shared object" not in msg:
-            raise
-        _pip_uninstall_gui_cv2()
-        _pip_install_headless_nodeps()
-        import cv2 as _cv2
-
-    os.environ["INSPECTRAIL_CV2_OK"] = "1"
-    return _cv2
-
-
-cv2 = _load_cv2()
-
+import os
 import streamlit as st
+import cv2
 import numpy as np
 import torch
 import torch.nn as nn
