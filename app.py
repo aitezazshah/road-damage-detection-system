@@ -4,8 +4,49 @@
 # ===========================
 
 import os
+import subprocess
+import sys
+
+
+def _load_cv2():
+    """Ultralytics often pulls opencv-python (needs libGL). Streamlit Cloud is headless."""
+    if os.environ.get("INSPECTRAIL_CV2_OK") == "1":
+        import cv2 as _cv2
+
+        return _cv2
+    try:
+        import cv2 as _cv2
+
+        os.environ["INSPECTRAIL_CV2_OK"] = "1"
+        return _cv2
+    except Exception as e:
+        msg = str(e).lower()
+        if "libgl" not in msg and "cannot open shared object" not in msg:
+            raise
+        subprocess.run(
+            [sys.executable, "-m", "pip", "uninstall", "-y", "opencv-python", "opencv-contrib-python"],
+            capture_output=True,
+        )
+        subprocess.check_call(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--no-cache-dir",
+                "opencv-python-headless==4.10.0.84",
+            ]
+        )
+        sys.modules.pop("cv2", None)
+        import cv2 as _cv2
+
+        os.environ["INSPECTRAIL_CV2_OK"] = "1"
+        return _cv2
+
+
+cv2 = _load_cv2()
+
 import streamlit as st
-import cv2
 import numpy as np
 import torch
 import torch.nn as nn
