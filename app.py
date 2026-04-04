@@ -4,59 +4,18 @@
 # ===========================
 
 import os
-import subprocess
-import sys
-
-
-# Force headless mode before any other imports
 os.environ["OPENCV_VIDEOIO_PRIORITY_BACKEND"] = "0"
 
-
-def _is_streamlit_cloud() -> bool:
-    """Repo is mounted under /mount/src on Streamlit Community Cloud."""
-    try:
-        return "/mount/src" in os.path.abspath(__file__)
-    except Exception:
-        return False
-
-
-def _pip_uninstall_gui_cv2() -> None:
-    subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pip",
-            "uninstall",
-            "-y",
-            "opencv-python",
-            "opencv-contrib-python",
-        ],
-        capture_output=True,
-    )
-    sys.modules.pop("cv2", None)
-
-
-def _pip_install_headless_nodeps() -> None:
-    """Do not use --force-reinstall: it reinstalls numpy and can hit Errno 13 on Streamlit Cloud."""
-    subprocess.check_call(
-        [
-            sys.executable,
-            "-m",
-            "pip",
-            "install",
-            "--no-cache-dir",
-            "--no-deps",
-            "opencv-python-headless==4.10.0.84",
-        ]
-    )
-    sys.modules.pop("cv2", None)
-
-
-
-import os
 import streamlit as st
 import cv2
 import numpy as np
+
+
+
+
+
+
+
 import torch
 import torch.nn as nn
 from PIL import Image
