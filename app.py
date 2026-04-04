@@ -8,6 +8,10 @@ import subprocess
 import sys
 
 
+# Force headless mode before any other imports
+os.environ["OPENCV_VIDEOIO_PRIORITY_BACKEND"] = "0"
+
+
 def _is_streamlit_cloud() -> bool:
     """Repo is mounted under /mount/src on Streamlit Community Cloud."""
     try:
