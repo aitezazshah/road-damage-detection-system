@@ -23,12 +23,17 @@ export default function InspectPage() {
   const fileRef = useRef(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const lastAutoGeoKeyRef = useRef(null);
   const [camReady, setCamReady] = useState(false);
 
   const runAnalysis = useCallback(async (file) => {
     if (!file) return;
     setErr(null);
     setResult(null);
+    setLat("");
+    setLon("");
+    setGeoHint(null);
+    lastAutoGeoKeyRef.current = null;
     setBusy(true);
     setSourceLabel(file.name || "capture.jpg");
     try {
@@ -76,7 +81,8 @@ export default function InspectPage() {
     setCamReady(false);
   };
 
-  const requestDeviceLocation = useCallback(() => {
+  const requestDeviceLocation = useCallback((opts = {}) => {
+    const { onlyIfEmpty = false } = opts;
     if (typeof window === "undefined" || !navigator.geolocation) {
       setGeoHint("Geolocation is not supported in this browser.");
       return;
@@ -84,8 +90,15 @@ export default function InspectPage() {
     setGeoHint("Requesting location…");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setLat(pos.coords.latitude.toFixed(6));
-        setLon(pos.coords.longitude.toFixed(6));
+        const la = pos.coords.latitude.toFixed(6);
+        const lo = pos.coords.longitude.toFixed(6);
+        if (onlyIfEmpty) {
+          setLat((prev) => (prev && String(prev).trim() !== "" ? prev : la));
+          setLon((prev) => (prev && String(prev).trim() !== "" ? prev : lo));
+        } else {
+          setLat(la);
+          setLon(lo);
+        }
         setGeoHint("Filled from your device (browser GPS). You can edit if needed.");
       },
       () => {
@@ -97,10 +110,13 @@ export default function InspectPage() {
     );
   }, []);
 
-  /** After analysis, ask the browser for GPS once (HTTPS / localhost only). */
+  /** After each new analysis result, request GPS once — does not overwrite typed coords. */
   useEffect(() => {
-    if (!result) return;
-    requestDeviceLocation();
+    if (!result?.annotated_image_b64) return;
+    const key = result.annotated_image_b64.slice(0, 80);
+    if (lastAutoGeoKeyRef.current === key) return;
+    lastAutoGeoKeyRef.current = key;
+    requestDeviceLocation({ onlyIfEmpty: true });
   }, [result, requestDeviceLocation]);
 
   const capturePhoto = async () => {

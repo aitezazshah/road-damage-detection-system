@@ -17,6 +17,7 @@ import tempfile
 import time
 import json
 import datetime
+import hashlib
 import base64
 import functools
 
@@ -684,6 +685,7 @@ if st.session_state.page == "inspect":
     img_bgr    = None
     tmp_path   = None
     source_label = ""
+    image_fingerprint = None  # stable across reruns (tmp_path changes every run — do not use as id)
 
     # ── Upload ──
     if "Upload" in input_mode:
@@ -693,9 +695,12 @@ if st.session_state.page == "inspect":
             label_visibility="collapsed"
         )
         if uploaded:
+            uploaded.seek(0)
             suffix = Path(uploaded.name).suffix
+            file_bytes = uploaded.read()
+            image_fingerprint = f"up:{uploaded.name}:{getattr(uploaded, 'size', len(file_bytes))}"
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-                tmp.write(uploaded.read())
+                tmp.write(file_bytes)
                 tmp_path = Path(tmp.name)
             img_bgr      = cv2.imread(str(tmp_path))
             source_label = uploaded.name
@@ -705,13 +710,16 @@ if st.session_state.page == "inspect":
         st.info("📷 Allow camera access when prompted. Click **Take Photo** to capture.", icon="ℹ️")
         cam_img = st.camera_input("Capture road image", label_visibility="collapsed")
         if cam_img:
-            nparr    = np.frombuffer(cam_img.getvalue(), np.uint8)
+            raw_cam = cam_img.getvalue()
+            digest = hashlib.md5(raw_cam).hexdigest()
+            image_fingerprint = f"cam:{digest}"
+            source_label = f"camera_{digest[:12]}.jpg"
+            nparr    = np.frombuffer(raw_cam, np.uint8)
             img_bgr  = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             suffix   = ".jpg"
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-                tmp.write(cam_img.getvalue())
+                tmp.write(raw_cam)
                 tmp_path     = Path(tmp.name)
-            source_label = f"camera_{datetime.datetime.now().strftime('%H%M%S')}.jpg"
 
     # ── Location (browser GPS when available) ──
     if img_bgr is not None:
@@ -758,9 +766,9 @@ if st.session_state.page == "inspect":
         if "lon_in" not in st.session_state:
             st.session_state.lon_in = ""
 
-        cur_img = str(tmp_path) if tmp_path else ""
-        if st.session_state.get("_geo_session_key") != cur_img:
-            st.session_state._geo_session_key = cur_img
+        # Only when the *image* changes — not on every rerun (tmp_path changes every rerun).
+        if image_fingerprint and st.session_state.get("_geo_session_key") != image_fingerprint:
+            st.session_state._geo_session_key = image_fingerprint
             st.session_state.lat_in = ""
             st.session_state.lon_in = ""
             st.session_state.geo_nonce = st.session_state.get("geo_nonce", 0) + 1
