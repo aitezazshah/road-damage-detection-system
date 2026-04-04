@@ -713,14 +713,71 @@ if st.session_state.page == "inspect":
                 tmp_path     = Path(tmp.name)
             source_label = f"camera_{datetime.datetime.now().strftime('%H%M%S')}.jpg"
 
-    # ── Optional GPS ──
+    # ── Location (browser GPS when available) ──
     if img_bgr is not None:
         st.markdown('<div class="section-header">Location (Optional)</div>', unsafe_allow_html=True)
-        gc1, gc2 = st.columns(2)
+        st.caption(
+            "We request your browser’s location once (HTTPS / localhost). "
+            "Allow the prompt, or edit coordinates manually."
+        )
+
+        def _fill_geo_from_browser() -> None:
+            try:
+                from streamlit_js_eval import streamlit_js_eval
+            except ImportError:
+                return
+            nonce = st.session_state.get("geo_nonce", 0)
+            raw = streamlit_js_eval(
+                js_expressions="""
+                await new Promise((resolve) => {
+                  if (!navigator.geolocation) { resolve(""); return; }
+                  navigator.geolocation.getCurrentPosition(
+                    (p) => resolve(JSON.stringify({
+                      lat: p.coords.latitude,
+                      lon: p.coords.longitude
+                    })),
+                    () => resolve(""),
+                    { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+                  );
+                })
+                """,
+                key=f"inspectrail_geo_{nonce}",
+                want_output=True,
+            )
+            if not raw:
+                return
+            try:
+                d = json.loads(raw)
+                st.session_state.lat_in = f'{float(d["lat"]):.6f}'
+                st.session_state.lon_in = f'{float(d["lon"]):.6f}'
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+                pass
+
+        if "lat_in" not in st.session_state:
+            st.session_state.lat_in = ""
+        if "lon_in" not in st.session_state:
+            st.session_state.lon_in = ""
+
+        cur_img = str(tmp_path) if tmp_path else ""
+        if st.session_state.get("_geo_session_key") != cur_img:
+            st.session_state._geo_session_key = cur_img
+            st.session_state.lat_in = ""
+            st.session_state.lon_in = ""
+            st.session_state.geo_nonce = st.session_state.get("geo_nonce", 0) + 1
+            _fill_geo_from_browser()
+
+        gc1, gc2, gc3 = st.columns([2, 2, 1])
         with gc1:
-            lat = st.text_input("Latitude",  placeholder="e.g. 33.7294")
+            lat = st.text_input("Latitude", key="lat_in", placeholder="Auto or e.g. 33.7294")
         with gc2:
-            lon = st.text_input("Longitude", placeholder="e.g. 73.0931")
+            lon = st.text_input("Longitude", key="lon_in", placeholder="Auto or e.g. 73.0931")
+        with gc3:
+            st.write("")  # align button
+            st.write("")
+            if st.button("📍 Refresh location"):
+                st.session_state.geo_nonce = st.session_state.get("geo_nonce", 0) + 1
+                _fill_geo_from_browser()
+
         location_str = f"{lat}, {lon}" if lat and lon else "Not provided"
 
     # ── Run Analysis ──
