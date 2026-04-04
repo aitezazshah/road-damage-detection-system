@@ -1,20 +1,13 @@
-# ===========================
-# InspectRAIL — Road Analysis and Inspection Logic
-# app.py
-# ===========================
-
 import os
+import sys
+
+# MUST BE THE FIRST TWO LINES OF CODE
 os.environ["OPENCV_VIDEOIO_PRIORITY_BACKEND"] = "0"
+os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
 import streamlit as st
 import cv2
 import numpy as np
-
-
-
-
-
-
 
 import torch
 import torch.nn as nn
