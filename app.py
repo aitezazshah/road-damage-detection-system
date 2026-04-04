@@ -548,11 +548,20 @@ def compute_anomaly_score(img_bgr, model, patch_size=128, num_patches=4):
         h, w = roi.shape[:2]
     criterion = nn.MSELoss()
     losses = []
-    for _ in range(num_patches):
-        y = np.random.randint(0, h - patch_size + 1)
-        x = np.random.randint(0, w - patch_size + 1)
-        patch   = roi[y:y+patch_size, x:x+patch_size].astype(np.float32)/255.0
-        patch_t = torch.tensor(np.transpose(patch,(2,0,1)), dtype=torch.float32).unsqueeze(0)
+    # Fixed grid (no random patches) — same image gives the same score on every Streamlit rerun
+    gr = int(np.ceil(np.sqrt(num_patches)))
+    gc = int(np.ceil(num_patches / max(gr, 1)))
+    max_y = max(0, h - patch_size)
+    max_x = max(0, w - patch_size)
+    for i in range(num_patches):
+        ri = i // gc
+        ci = i % gc
+        y = int((ri + 0.5) / max(gr, 1) * max_y) if max_y > 0 else 0
+        x = int((ci + 0.5) / max(gc, 1) * max_x) if max_x > 0 else 0
+        y = min(y, max_y)
+        x = min(x, max_x)
+        patch = roi[y : y + patch_size, x : x + patch_size].astype(np.float32) / 255.0
+        patch_t = torch.tensor(np.transpose(patch, (2, 0, 1)), dtype=torch.float32).unsqueeze(0)
         with torch.no_grad():
             losses.append(criterion(model(patch_t), patch_t).item())
     return float(np.mean(losses))
